@@ -7,7 +7,6 @@
 //
 
 import UIKit
-import WebKit
 
 public enum YouTubePlayerState: String {
     case Unstarted = "-1"
@@ -81,11 +80,11 @@ public func videoIDFromYouTubeURL(videoURL: NSURL) -> String? {
 }
 
 /** Embed and control YouTube videos */
-public class YouTubePlayerView: UIView, WKNavigationDelegate {
+public class YouTubePlayerView: UIView, UIWebViewDelegate {
 
     public typealias YouTubePlayerParameters = [String: AnyObject]
 
-    private var webView: WKWebView!
+    private var webView: UIWebView!
 
     /** The readiness of the player */
     private(set) public var ready = false
@@ -128,16 +127,13 @@ public class YouTubePlayerView: UIView, WKNavigationDelegate {
     // MARK: Web view initialization
 
     private func buildWebView(parameters: [String: AnyObject]) {
-
-        let configuration = WKWebViewConfiguration()
-        configuration.allowsInlineMediaPlayback = true
+        webView = UIWebView()
+        webView.allowsInlineMediaPlayback = true
         if #available(iOS 9.0, *) {
-            configuration.allowsPictureInPictureMediaPlayback = false
+            webView.allowsPictureInPictureMediaPlayback = false
         }
-        configuration.mediaPlaybackRequiresUserAction = false
-        webView = WKWebView(frame: CGRect.zero, configuration: configuration)
-
-        webView.navigationDelegate = self
+        webView.mediaPlaybackRequiresUserAction = false
+        webView.delegate = self
         webView.scrollView.scrollEnabled = false
     }
 
@@ -208,24 +204,7 @@ public class YouTubePlayerView: UIView, WKNavigationDelegate {
     
     private func evaluatePlayerCommand(command: String) -> String? {
         let fullCommand = "player." + command + ";"
-        var resultString: String?
-        var finished = false
-        webView.evaluateJavaScript(fullCommand, completionHandler: { (result, error) in
-            if error == nil {
-                if (result != nil) {
-                    if let result = result as? String {
-                        resultString = result
-                    }
-                }
-            }
-            finished = true
-        })
-
-        while !finished {
-            NSRunLoop.currentRunLoop().runMode("NSDefaultRunLoopMode", beforeDate: NSDate.distantFuture())
-        }
-
-        return resultString;
+        return webView.stringByEvaluatingJavaScriptFromString(fullCommand)
     }
 
 
@@ -350,20 +329,20 @@ public class YouTubePlayerView: UIView, WKNavigationDelegate {
     }
 
 
-    // MARK: WKNavigationDelegate
+    // MARK: UIWebViewDelegate
 
-    public func webView(webView: WKWebView, decidePolicyForNavigationAction navigationAction: WKNavigationAction, decisionHandler: ((WKNavigationActionPolicy) -> Void)) {
+    public func webView(webView: UIWebView, shouldStartLoadWithRequest request: NSURLRequest, navigationType: UIWebViewNavigationType) -> Bool {
 
-        if let url = navigationAction.request.URL where url.scheme == "ytplayer" {
-            handleJSEvent(url)
-        }
-        decisionHandler(.Allow)
+        let url = request.URL
+
+        // Check if ytplayer event and, if so, pass to handleJSEvent
+        if let url = url where url.scheme == "ytplayer" { handleJSEvent(url) }
+
+        return true
     }
 }
-
 
 private func printLog(strings: CustomStringConvertible...) {
     let toPrint = ["[YouTubePlayer]"] + strings
     print(toPrint, separator: " ", terminator: "\n")
 }
-
